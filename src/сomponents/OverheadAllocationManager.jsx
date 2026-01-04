@@ -137,7 +137,8 @@ export default function OverheadAllocationManager({
       // ✅ Уведомляем родителя
       if (onDataChange) onDataChange();
     } catch (err) {
-      alert(err.message || "Ошибка при удалении");
+       await loadData();
+      console.log(err.message || "Ошибка при удалении");
     }
   };
 
