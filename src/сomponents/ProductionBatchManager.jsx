@@ -391,22 +391,6 @@ export default function ProductionBatchManager() {
                 <option value="отменена">Отменена</option>
               </select>
             </div>
-            {/* <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Плановая себестоимость (₽)
-              </label>
-              <input
-                type="number"
-                name="planned_cost"
-                value={form.planned_cost || ""}
-                onChange={handleChange}
-                step="0.01"
-                min="0"
-                placeholder="Например: 50000.00"
-                className="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500"
-              />
-            </div> */}
-
             <div className="md:col-span-2 flex gap-3 pt-2">
               <button
                 type="submit"

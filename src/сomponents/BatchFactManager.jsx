@@ -2,16 +2,16 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { batchFactApi } from "../services/batchFactApi";
 import { productApi } from "../services/productApi";
-import { overheadAllocationApi } from "../services/overheadAllocationApi"; // ← ДОБАВЛЕНО
+import { overheadAllocationApi } from "../services/overheadAllocationApi";
 
-export default function BatchFactManager({ batchId, batchName }) {
+export default function BatchFactManager({ batchId, batchName, onDataChange }) {
   const [facts, setFacts] = useState([]);
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
-  const [overheadTotal, setOverheadTotal] = useState(0); // ← ДОБАВЛЕНО
+  const [overheadTotal, setOverheadTotal] = useState(0);
 
   const [form, setForm] = useState({
     product_id: "",
@@ -19,14 +19,12 @@ export default function BatchFactManager({ batchId, batchName }) {
     deviation_reason: "",
   });
 
-  // Только сырьё и полуфабрикаты
   const INPUT_CATEGORY_IDS = [1, 2];
   const inputProducts = useMemo(
     () => products.filter((p) => INPUT_CATEGORY_IDS.includes(p.category_id)),
     [products]
   );
 
-  // Расчёт прямых затрат (сырьё)
   const totalCost = useMemo(() => {
     return facts.reduce((sum, fact) => {
       const product = products.find((p) => p.id === fact.product_id);
@@ -36,13 +34,12 @@ export default function BatchFactManager({ batchId, batchName }) {
     }, 0);
   }, [facts, products]);
 
-  // Полная себестоимость = сырьё + накладные
   const fullCost = useMemo(() => {
     return totalCost + overheadTotal;
   }, [totalCost, overheadTotal]);
 
-  // Защита: не грузим данные, если batchId некорректен
-  useEffect(() => {
+  // ✅ Вынесенная функция загрузки данных
+  const loadData = async () => {
     if (
       batchId == null ||
       (typeof batchId === "string" && batchId.trim() === "")
@@ -59,31 +56,31 @@ export default function BatchFactManager({ batchId, batchName }) {
       return;
     }
 
-    const loadData = async () => {
-      try {
-        setError(null);
-        const [factList, prodList, overheadList] = await Promise.all([
-          batchFactApi.getByBatchId(id),
-          productApi.getAll(),
-          overheadAllocationApi.getByBatchId(id), // ← ЗАГРУЗКА НАКЛАДНЫХ
-        ]);
-        setFacts(factList);
-        setProducts(prodList);
+    try {
+      setError(null);
+      const [factList, prodList, overheadList] = await Promise.all([
+        batchFactApi.getByBatchId(id),
+        productApi.getAll(),
+        overheadAllocationApi.getByBatchId(id),
+      ]);
+      setFacts(factList);
+      setProducts(prodList);
 
-        // Сумма накладных расходов
-        const overheadSum = overheadList.reduce(
-          (sum, item) => sum + (item.allocated_amount || 0),
-          0
-        );
-        setOverheadTotal(overheadSum);
-      } catch (err) {
-        setError("Не удалось загрузить данные о расходе");
-        console.error("BatchFactManager error:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
+      const overheadSum = overheadList.reduce(
+        (sum, item) => sum + (item.allocated_amount || 0),
+        0
+      );
+      setOverheadTotal(overheadSum);
+    } catch (err) {
+      setError("Не удалось загрузить данные о расходе");
+      console.error("BatchFactManager error:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
+    setLoading(true);
     loadData();
   }, [batchId]);
 
@@ -124,9 +121,9 @@ export default function BatchFactManager({ batchId, batchName }) {
         await batchFactApi.create(payload);
       }
 
-      const updated = await batchFactApi.getByBatchId(id);
-      setFacts(updated);
+      await loadData(); // ✅ Перезагружаем данные
       resetForm();
+      if (onDataChange) onDataChange();
     } catch (err) {
       alert(err.message || "Ошибка при сохранении расхода");
     }
@@ -145,10 +142,18 @@ export default function BatchFactManager({ batchId, batchName }) {
   const handleDelete = async (id) => {
     if (!confirm("Удалить запись о расходе?")) return;
     try {
-      await batchFactApi.delete(id);
+      // Сначала оптимистично удаляем из UI
       setFacts((prev) => prev.filter((f) => f.id !== id));
+      // Затем удаляем на сервере
+      await batchFactApi.delete(id);
+      // ИЛИ — если вы хотите 100% актуальность — перезагружаем:
+      await loadData();
+       if (onDataChange) onDataChange();
     } catch (err) {
-      alert(err.message || "Ошибка при удалении");
+      // При ошибке — откатываем
+      console.log(`Ошибка удаления ${err}` );
+      await loadData(); // восстанавливаем актуальное состояние
+       if (onDataChange) onDataChange();
     }
   };
 

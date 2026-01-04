@@ -1,10 +1,14 @@
 // src/components/OverheadAllocationManager.jsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { overheadAllocationApi } from "../services/overheadAllocationApi";
 import { costCenterApi } from "../services/costCenterApi";
 import { productionBatchApi } from "../services/productionBatchApi";
 
-export default function OverheadAllocationManager({ batchId, batchName }) {
+export default function OverheadAllocationManager({
+  batchId,
+  batchName,
+  onDataChange,
+}) {
   const [allocations, setAllocations] = useState([]);
   const [costCenters, setCostCenters] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -17,48 +21,53 @@ export default function OverheadAllocationManager({ batchId, batchName }) {
     allocated_amount: "",
   });
 
-  // ✅ ЕДИНСТВЕННЫЙ useEffect
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        const id = Number(batchId);
-        if (isNaN(id) || id <= 0) {
-          setError("Некорректный ID партии");
-          return;
-        }
+  // ✅ Вынесенная функция загрузки
+  const loadData = useCallback(async () => {
+    if (batchId == null) {
+      setLoading(false);
+      return;
+    }
 
-        // 1. Получаем партию, чтобы узнать её цех
-        const batch = await productionBatchApi.getById(id);
-        const workshopId = batch.workshop_id;
+    const id = Number(batchId);
+    if (isNaN(id) || id <= 0) {
+      setError("Некорректный ID партии");
+      setLoading(false);
+      return;
+    }
 
-        // 2. Получаем ВСЕ центры затрат
-        const ccList = await costCenterApi.getAll();
+    try {
+      setError(null);
+      setLoading(true);
 
-        // 3. Фильтруем ТОЛЬКО по цеху партии
-        const filteredCostCenters = ccList.filter(cc => cc.workshop_id === workshopId);
+      // 1. Получаем партию, чтобы узнать её цех
+      const batch = await productionBatchApi.getById(id);
+      const workshopId = batch.workshop_id;
 
-        // 4. Получаем уже распределённые накладные для этой партии
-        const allocList = await overheadAllocationApi.getByBatchId(id);
+      // 2. Получаем ВСЕ центры затрат
+      const ccList = await costCenterApi.getAll();
 
-        setCostCenters(filteredCostCenters);
-        setAllocations(allocList);
-        setError(null);
-      } catch (err) {
-        console.error("Ошибка загрузки накладных расходов:", err);
-        setError("Не удалось загрузить данные о накладных расходах");
-      } finally {
-        setLoading(false);
-      }
-    };
+      // 3. Фильтруем ТОЛЬКО по цеху партии
+      const filteredCostCenters = ccList.filter(
+        (cc) => cc.workshop_id === workshopId
+      );
 
-    if (batchId != null) {
-      loadData();
-    } else {
+      // 4. Получаем уже распределённые накладные для этой партии
+      const allocList = await overheadAllocationApi.getByBatchId(id);
+
+      setCostCenters(filteredCostCenters);
+      setAllocations(allocList);
+    } catch (err) {
+      console.error("Ошибка загрузки накладных расходов:", err);
+      setError("Не удалось загрузить данные о накладных расходах");
+    } finally {
       setLoading(false);
     }
   }, [batchId]);
 
-  // ... остальной код (handleSubmit, handleEdit и т.д.) остаётся БЕЗ ИЗМЕНЕНИЙ ...
+  // Загружаем при монтировании и при изменении batchId
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -96,8 +105,12 @@ export default function OverheadAllocationManager({ batchId, batchName }) {
         await overheadAllocationApi.create(payload);
       }
 
-      const updated = await overheadAllocationApi.getByBatchId(id);
-      setAllocations(updated);
+      // ✅ Полная перезагрузка
+      await loadData();
+
+      // ✅ Уведомляем родителя
+      if (onDataChange) onDataChange();
+
       resetForm();
     } catch (err) {
       alert(err.message || "Ошибка при сохранении распределения");
@@ -117,7 +130,12 @@ export default function OverheadAllocationManager({ batchId, batchName }) {
     if (!confirm("Удалить распределение накладных расходов?")) return;
     try {
       await overheadAllocationApi.delete(id);
-      setAllocations((prev) => prev.filter((a) => a.id !== id));
+
+      // ✅ Полная перезагрузка (НЕ setAllocations(filter(...)))
+      await loadData();
+
+      // ✅ Уведомляем родителя
+      if (onDataChange) onDataChange();
     } catch (err) {
       alert(err.message || "Ошибка при удалении");
     }
