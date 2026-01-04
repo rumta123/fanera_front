@@ -28,6 +28,7 @@ export default function ProductManager() {
     thickness_mm: "",
     dimensions: "",
     unit: "лист",
+    cost_per_unit: "", // ← ДОБАВЛЕНО
   });
 
   // Загрузка данных
@@ -71,7 +72,7 @@ export default function ProductManager() {
         let bValue = b[sortConfig.key];
 
         // Обработка чисел
-        if (sortConfig.key === "thickness_mm") {
+        if (sortConfig.key === "thickness_mm" || sortConfig.key === "cost_per_unit") {
           aValue = Number(aValue) || 0;
           bValue = Number(bValue) || 0;
         }
@@ -106,6 +107,7 @@ export default function ProductManager() {
     const payload = {
       ...form,
       category_id: Number(form.category_id),
+      cost_per_unit: form.cost_per_unit ? Number(form.cost_per_unit) : null, // ← ДОБАВЛЕНО
       thickness_mm: form.thickness_mm ? Number(form.thickness_mm) : undefined,
     };
 
@@ -138,6 +140,7 @@ export default function ProductManager() {
       thickness_mm: product.thickness_mm?.toString() || "",
       dimensions: product.dimensions || "",
       unit: product.unit || "лист",
+      cost_per_unit: product.cost_per_unit != null ? product.cost_per_unit.toString() : "", // ← ДОБАВЛЕНО
     });
     setEditingId(product.id);
     setIsFormOpen(true);
@@ -162,6 +165,7 @@ export default function ProductManager() {
       thickness_mm: "",
       dimensions: "",
       unit: "лист",
+      cost_per_unit: "", // ← ДОБАВЛЕНО
     });
     setEditingId(null);
     setIsFormOpen(false);
@@ -320,6 +324,22 @@ export default function ProductManager() {
                 ))}
               </select>
             </div>
+            {/* ✅ НОВОЕ ПОЛЕ: Цена за единицу */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Цена за единицу (₽)
+              </label>
+              <input
+                type="number"
+                name="cost_per_unit"
+                value={form.cost_per_unit}
+                onChange={handleChange}
+                min="0"
+                step="0.01"
+                placeholder="Например: 150.00"
+                className="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
             <div className="md:col-span-2 flex gap-3 pt-2">
               <button
                 type="submit"
@@ -385,6 +405,10 @@ export default function ProductManager() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                   Ед.
                 </th>
+                {/* ✅ НОВАЯ КОЛОНКА */}
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  Цена (₽)
+                </th>
                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
                   Действия
                 </th>
@@ -411,6 +435,10 @@ export default function ProductManager() {
                     {p.dimensions || "—"}
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-600">{p.unit}</td>
+                  {/* ✅ НОВАЯ ЯЧЕЙКА */}
+                  <td className="px-4 py-3 text-sm text-gray-600">
+                    {p.cost_per_unit != null ? p.cost_per_unit.toFixed(2) : "—"}
+                  </td>
                   <td className="px-4 py-3 text-right text-sm">
                     <button
                       onClick={() => handleEdit(p)}

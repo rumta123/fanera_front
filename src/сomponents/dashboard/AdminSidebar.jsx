@@ -27,6 +27,7 @@ export default function AdminSidebar({ activeSection, setActiveSection }) {
   );
 
   return (
+    
     <div className="w-64 bg-white shadow-md relative min-h-screen">
       <div className="p-4 border-b">
         <h1 className="text-xl font-bold text-gray-800">
