@@ -20,9 +20,13 @@ export default function ProductionBatchManager() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [selectedBatchId, setSelectedBatchId] = useState(null);
-  const [selectedComparisonBatchId, setSelectedComparisonBatchId] = useState(null);
+  const [selectedComparisonBatchId, setSelectedComparisonBatchId] =
+    useState(null);
   const [selectedOverheadBatchId, setSelectedOverheadBatchId] = useState(null);
   const { role } = useAuth();
+
+  // 🔑 Ключевое состояние для синхронизации дочерних компонентов
+  const [dataVersion, setDataVersion] = useState(0);
 
   const [form, setForm] = useState({
     product_id: "",
@@ -32,8 +36,6 @@ export default function ProductionBatchManager() {
     planned_quantity: "",
     actual_quantity: "",
     status: "в работе",
-    // planned_cost: "",
-    // actual_cost НЕ ВКЛЮЧАЕМ — рассчитывается автоматически
   });
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -61,7 +63,6 @@ export default function ProductionBatchManager() {
       setProducts(prodList);
       setWorkshops(wsList);
 
-      // Для каждой партии считаем прямые и накладные затраты (используем данные продуктов)
       const costPromises = batchList.map(async (batch) => {
         try {
           const [facts, overheads] = await Promise.all([
@@ -76,16 +77,24 @@ export default function ProductionBatchManager() {
             return sum + fact.actual_quantity * unitCost;
           }, 0);
 
-          const overheadSum = overheads.reduce((s, a) => s + (a.allocated_amount || 0), 0);
+          const overheadSum = overheads.reduce(
+            (s, a) => s + (a.allocated_amount || 0),
+            0
+          );
 
-          return [batch.id, { totalDirect, overheadSum, fullCost: totalDirect + overheadSum }];
+          return [
+            batch.id,
+            { totalDirect, overheadSum, fullCost: totalDirect + overheadSum },
+          ];
         } catch (err) {
           return [batch.id, null];
         }
       });
 
       const resolved = await Promise.all(costPromises);
-      const costsMap = Object.fromEntries(resolved.filter(([, v]) => v != null));
+      const costsMap = Object.fromEntries(
+        resolved.filter(([, v]) => v != null)
+      );
       setBatchCosts(costsMap);
     } catch (err) {
       setError("Не удалось загрузить данные");
@@ -97,7 +106,14 @@ export default function ProductionBatchManager() {
 
   // Загружаем при монтировании
   useEffect(() => {
+    setLoading(true);
     loadData();
+  }, [loadData]);
+
+  // ✅ Единая функция для обновления всех данных
+  const handleDataChange = useCallback(() => {
+    loadData(); // Обновляем основной список партий
+    setDataVersion((v) => v + 1); // Триггер для пересоздания модальных окон
   }, [loadData]);
 
   const handleChange = (e) => {
@@ -114,10 +130,10 @@ export default function ProductionBatchManager() {
       start_date: form.start_date,
       end_date: form.end_date,
       planned_quantity: Number(form.planned_quantity),
-      actual_quantity: form.actual_quantity ? Number(form.actual_quantity) : null,
+      actual_quantity: form.actual_quantity
+        ? Number(form.actual_quantity)
+        : null,
       status: form.status,
-      // planned_cost: form.planned_cost ? Number(form.planned_cost) : null,
-      // actual_cost НЕ передаём
     };
 
     if (
@@ -142,7 +158,7 @@ export default function ProductionBatchManager() {
       } else {
         await productionBatchApi.create(payload);
       }
-      await loadData(); // Обновляем список после сохранения
+      await loadData();
       resetForm();
     } catch (err) {
       alert(err.message || "Ошибка при сохранении партии");
@@ -156,9 +172,9 @@ export default function ProductionBatchManager() {
       start_date: batch.start_date || "",
       end_date: batch.end_date || "",
       planned_quantity: batch.planned_quantity?.toString() || "",
-      actual_quantity: batch.actual_quantity != null ? batch.actual_quantity.toString() : "",
+      actual_quantity:
+        batch.actual_quantity != null ? batch.actual_quantity.toString() : "",
       status: batch.status || "в работе",
-      // planned_cost: batch.planned_cost != null ? batch.planned_cost.toString() : "",
     });
     setEditingId(batch.id);
     setIsFormOpen(true);
@@ -168,12 +184,13 @@ export default function ProductionBatchManager() {
     if (!confirm("Удалить производственную партию?")) return;
     try {
       await productionBatchApi.delete(id);
-      await loadData(); // Обновляем после удаления
+      await loadData();
       if (selectedBatchId === id) setSelectedBatchId(null);
       if (selectedComparisonBatchId === id) setSelectedComparisonBatchId(null);
       if (selectedOverheadBatchId === id) setSelectedOverheadBatchId(null);
     } catch (err) {
       alert(err.message || "Ошибка при удалении");
+      await loadData();
     }
   };
 
@@ -186,7 +203,6 @@ export default function ProductionBatchManager() {
       planned_quantity: "",
       actual_quantity: "",
       status: "в работе",
-      // planned_cost: "",
     });
     setEditingId(null);
     setIsFormOpen(false);
@@ -282,7 +298,10 @@ export default function ProductionBatchManager() {
           <h3 className="text-lg font-semibold mb-4">
             {editingId ? "Редактировать партию" : "Создать партию"}
           </h3>
-          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <form
+            onSubmit={handleSubmit}
+            className="grid grid-cols-1 md:grid-cols-2 gap-4"
+          >
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Продукт *
@@ -457,7 +476,9 @@ export default function ProductionBatchManager() {
                       {getWorkshopName(b.workshop_id)}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-600">
-                      {b.planned_quantity != null ? `${b.planned_quantity}${unitLabel}` : "—"}
+                      {b.planned_quantity != null
+                        ? `${b.planned_quantity}${unitLabel}`
+                        : "—"}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-600">
                       {b.actual_quantity == null ? (
@@ -465,19 +486,29 @@ export default function ProductionBatchManager() {
                       ) : (
                         <>
                           {`${b.actual_quantity}${unitLabel}`}
-                          {b.planned_quantity != null && (() => {
-                            const diff = Number(b.actual_quantity) - Number(b.planned_quantity);
-                            const isPlus = diff >= 0;
-                            const sign = isPlus ? "+" : "";
-                            const disp = Number.isInteger(diff) ? diff : diff.toFixed(3);
-                            return (
-                              <span
-                                className={isPlus ? "text-green-600 font-medium ml-2" : "text-red-600 font-medium ml-2"}
-                              >
-                                {isPlus ? "в плюс" : "в минус"} ({sign}{disp})
-                              </span>
-                            );
-                          })()}
+                          {b.planned_quantity != null &&
+                            (() => {
+                              const diff =
+                                Number(b.actual_quantity) -
+                                Number(b.planned_quantity);
+                              const isPlus = diff >= 0;
+                              const sign = isPlus ? "+" : "";
+                              const disp = Number.isInteger(diff)
+                                ? diff
+                                : diff.toFixed(3);
+                              return (
+                                <span
+                                  className={
+                                    isPlus
+                                      ? "text-green-600 font-medium ml-2"
+                                      : "text-red-600 font-medium ml-2"
+                                  }
+                                >
+                                  {isPlus ? "в плюс" : "в минус"} ({sign}
+                                  {disp})
+                                </span>
+                              );
+                            })()}
                         </>
                       )}
                     </td>
@@ -498,37 +529,58 @@ export default function ProductionBatchManager() {
                       </span>
                     </td>
 
-                    {/* ✅ СЕБЕСТОИМОСТЬ: план / факт (итого и на единицу) */}
                     <td className="px-4 py-3 text-sm">
                       {(() => {
                         const planned = b.planned_cost;
                         const actual = b.actual_cost;
                         const plannedQty = Number(b.planned_quantity) || 0;
-                        const actualQty = b.actual_quantity != null ? Number(b.actual_quantity) : null;
+                        const actualQty =
+                          b.actual_quantity != null
+                            ? Number(b.actual_quantity)
+                            : null;
                         const unit = product?.unit || "ед.";
-                        const unitSuffix = product?.unit ? ` ₽/${product.unit}` : " ₽/ед.";
+                        const unitSuffix = product?.unit
+                          ? ` ₽/${product.unit}`
+                          : " ₽/ед.";
 
-                        if (planned == null && actual == null && !product) return "—";
+                        if (planned == null && actual == null && !product)
+                          return "—";
 
                         const lines = [];
 
-                        // Planned: prefer stored planned_cost, otherwise estimate from product.cost_per_unit
                         if (planned != null) {
                           const plannedTotal = Number(planned).toFixed(2);
-                          const plannedPer = plannedQty > 0 ? (Number(planned) / plannedQty).toFixed(2) : "—";
+                          const plannedPer =
+                            plannedQty > 0
+                              ? (Number(planned) / plannedQty).toFixed(2)
+                              : "—";
                           lines.push(
                             <div key="planned" className="text-gray-700">
-                              План: <span className="font-medium">{plannedTotal} ₽</span>
+                              План:{" "}
+                              <span className="font-medium">
+                                {plannedTotal} ₽
+                              </span>
                               {plannedPer !== "—" && (
-                                <span className="ml-2 text-sm text-gray-500">({plannedPer}{unitSuffix})</span>
+                                <span className="ml-2 text-sm text-gray-500">
+                                  ({plannedPer}
+                                  {unitSuffix})
+                                </span>
                               )}
                             </div>
                           );
-                        } else if (product?.cost_per_unit != null && plannedQty > 0) {
-                          const estPlanned = (product.cost_per_unit * plannedQty).toFixed(2);
+                        } else if (
+                          product?.cost_per_unit != null &&
+                          plannedQty > 0
+                        ) {
+                          const estPlanned = (
+                            product.cost_per_unit * plannedQty
+                          ).toFixed(2);
                           lines.push(
                             <div key="planned_est" className="text-gray-600">
-                              План (расч.): <span className="font-medium">{estPlanned} ₽</span>
+                              План (расч.):{" "}
+                              <span className="font-medium">
+                                {estPlanned} ₽
+                              </span>
                               <span className="ml-2 text-sm text-gray-500">
                                 ({product.cost_per_unit.toFixed(2)} ₽/{unit})
                               </span>
@@ -536,23 +588,37 @@ export default function ProductionBatchManager() {
                           );
                         }
 
-                        // Actual: prefer stored actual_cost, otherwise estimate from product.cost_per_unit
                         if (actual != null) {
                           const actualTotal = Number(actual).toFixed(2);
-                          const actualPer = actualQty && actualQty > 0 ? (Number(actual) / actualQty).toFixed(2) : "—";
+                          const actualPer =
+                            actualQty && actualQty > 0
+                              ? (Number(actual) / actualQty).toFixed(2)
+                              : "—";
                           lines.push(
                             <div key="actual" className="text-gray-700">
-                              Факт: <span className="font-medium">{actualTotal} ₽</span>
+                              Факт:{" "}
+                              <span className="font-medium">
+                                {actualTotal} ₽
+                              </span>
                               {actualPer !== "—" && (
-                                <span className="ml-2 text-sm text-gray-500">({actualPer}{unitSuffix})</span>
+                                <span className="ml-2 text-sm text-gray-500">
+                                  ({actualPer}
+                                  {unitSuffix})
+                                </span>
                               )}
                             </div>
                           );
-                        } else if (product?.cost_per_unit != null && actualQty != null) {
-                          const estActual = (product.cost_per_unit * actualQty).toFixed(2);
+                        } else if (
+                          product?.cost_per_unit != null &&
+                          actualQty != null
+                        ) {
+                          const estActual = (
+                            product.cost_per_unit * actualQty
+                          ).toFixed(2);
                           lines.push(
                             <div key="actual_est" className="text-gray-600">
-                              Факт (расч.): <span className="font-medium">{estActual} ₽</span>
+                              Факт (расч.):{" "}
+                              <span className="font-medium">{estActual} ₽</span>
                               <span className="ml-2 text-sm text-gray-500">
                                 ({product.cost_per_unit.toFixed(2)} ₽/{unit})
                               </span>
@@ -565,7 +631,6 @@ export default function ProductionBatchManager() {
                           (actual != null || product?.cost_per_unit != null) &&
                           (plannedQty > 0 || actualQty > 0)
                         ) {
-                          // compute numeric totals to compare: prefer stored values, otherwise estimated
                           const totalPlanned =
                             planned != null
                               ? Number(planned)
@@ -573,27 +638,32 @@ export default function ProductionBatchManager() {
                               ? product.cost_per_unit * plannedQty
                               : null;
                           const batchInfo = batchCosts[b.id];
-                          const totalActual = actual != null
-                            ? Number(actual)
-                            : batchInfo && batchInfo.fullCost != null
-                            ? Number(batchInfo.fullCost)
-                            : product && actualQty != null
-                            ? product.cost_per_unit * actualQty
-                            : null;
+                          const totalActual =
+                            actual != null
+                              ? Number(actual)
+                              : batchInfo && batchInfo.fullCost != null
+                              ? Number(batchInfo.fullCost)
+                              : product && actualQty != null
+                              ? product.cost_per_unit * actualQty
+                              : null;
 
                           if (totalPlanned != null && totalActual != null) {
                             const variance = totalActual - totalPlanned;
 
-                            // === Отклонение по общей сумме ===
                             if (Math.abs(variance) > 0.01) {
-                              const isPlus = variance < 0; // меньше = выгодно
+                              const isPlus = variance < 0;
                               const sign = variance >= 0 ? "+" : "";
                               lines.push(
                                 <div
                                   key="variance"
-                                  className={isPlus ? "text-green-600 font-medium" : "text-red-600 font-medium"}
+                                  className={
+                                    isPlus
+                                      ? "text-green-600 font-medium"
+                                      : "text-red-600 font-medium"
+                                  }
                                 >
-                                  {isPlus ? "в плюс" : "в минус"} ({sign}{Math.abs(variance).toFixed(2)} ₽)
+                                  {isPlus ? "в плюс" : "в минус"} ({sign}
+                                  {Math.abs(variance).toFixed(2)} ₽)
                                 </div>
                               );
                             } else {
@@ -604,7 +674,6 @@ export default function ProductionBatchManager() {
                               );
                             }
 
-                            // === Отклонение на единицу ===
                             if (plannedQty > 0 && actualQty) {
                               const perPlanned = totalPlanned / plannedQty;
                               const perActual = totalActual / actualQty;
@@ -616,14 +685,23 @@ export default function ProductionBatchManager() {
                                 lines.push(
                                   <div
                                     key="perUnit"
-                                    className={perIsPlus ? "text-green-600 text-sm" : "text-red-600 text-sm"}
+                                    className={
+                                      perIsPlus
+                                        ? "text-green-600 text-sm"
+                                        : "text-red-600 text-sm"
+                                    }
                                   >
-                                    На ед.: {perIsPlus ? "в плюс" : "в минус"} ({perSign}{Math.abs(perDiff).toFixed(2)} ₽/{unit})
+                                    На ед.: {perIsPlus ? "в плюс" : "в минус"} (
+                                    {perSign}
+                                    {Math.abs(perDiff).toFixed(2)} ₽/{unit})
                                   </div>
                                 );
                               } else {
                                 lines.push(
-                                  <div key="perUnit" className="text-gray-500 text-sm">
+                                  <div
+                                    key="perUnit"
+                                    className="text-gray-500 text-sm"
+                                  >
                                     На ед.: 0.00 ₽/{unit}
                                   </div>
                                 );
@@ -684,16 +762,19 @@ export default function ProductionBatchManager() {
         )}
       </div>
 
-      {/* Модальные компоненты с колбэком обновления */}
+      {/* МОДАЛЬНЫЕ ОКНА — КЛЮЧЕВЫЕ ИЗМЕНЕНИЯ ЗДЕСЬ */}
       {selectedBatchId && (
         <BatchFactManager
+          key={`batch-fact-${selectedBatchId}-${dataVersion}`}
           batchId={selectedBatchId}
           batchName={`${getProductName(
             batches.find((b) => b.id === selectedBatchId)?.product_id
           )} (${
-            batches.find((b) => b.id === selectedBatchId)?.planned_quantity || "?"
+            batches.find((b) => b.id === selectedBatchId)?.planned_quantity ||
+            "?"
           })`}
-          onDataChange={loadData}
+          onDataChange={handleDataChange}
+          dataVersion={dataVersion}
         />
       )}
       {selectedComparisonBatchId && (
@@ -704,13 +785,15 @@ export default function ProductionBatchManager() {
       )}
       {selectedOverheadBatchId && (
         <OverheadAllocationManager
+          key={`overhead-${selectedOverheadBatchId}-${dataVersion}`}
           batchId={selectedOverheadBatchId}
           batchName={`${getProductName(
             batches.find((b) => b.id === selectedOverheadBatchId)?.product_id
           )} (${
-            batches.find((b) => b.id === selectedOverheadBatchId)?.planned_quantity || "?"
+            batches.find((b) => b.id === selectedOverheadBatchId)
+              ?.planned_quantity || "?"
           })`}
-          onDataChange={loadData}
+          onDataChange={handleDataChange}
         />
       )}
     </div>

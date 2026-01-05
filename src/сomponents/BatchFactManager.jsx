@@ -4,7 +4,13 @@ import { batchFactApi } from "../services/batchFactApi";
 import { productApi } from "../services/productApi";
 import { overheadAllocationApi } from "../services/overheadAllocationApi";
 
-export default function BatchFactManager({ batchId, batchName, onDataChange }) {
+export default function BatchFactManager({
+  batchId,
+  batchName,
+  onDataChange,
+  dataVersion = 0,
+  
+}) {
   const [facts, setFacts] = useState([]);
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -38,7 +44,7 @@ export default function BatchFactManager({ batchId, batchName, onDataChange }) {
     return totalCost + overheadTotal;
   }, [totalCost, overheadTotal]);
 
-  // ✅ Вынесенная функция загрузки данных
+  // ✅ Функция загрузки — вызывается при изменении batchId ИЛИ dataVersion
   const loadData = async () => {
     if (
       batchId == null ||
@@ -79,10 +85,11 @@ export default function BatchFactManager({ batchId, batchName, onDataChange }) {
     }
   };
 
+  // 🔁 Перезагружаем при изменении batchId ИЛИ dataVersion
   useEffect(() => {
     setLoading(true);
     loadData();
-  }, [batchId]);
+  }, [batchId, dataVersion]); // 👈 добавили dataVersion
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -121,7 +128,7 @@ export default function BatchFactManager({ batchId, batchName, onDataChange }) {
         await batchFactApi.create(payload);
       }
 
-      await loadData(); // ✅ Перезагружаем данные
+      await loadData();
       resetForm();
       if (onDataChange) onDataChange();
     } catch (err) {
@@ -142,18 +149,12 @@ export default function BatchFactManager({ batchId, batchName, onDataChange }) {
   const handleDelete = async (id) => {
     if (!confirm("Удалить запись о расходе?")) return;
     try {
-      // Сначала оптимистично удаляем из UI
-      setFacts((prev) => prev.filter((f) => f.id !== id));
-      // Затем удаляем на сервере
       await batchFactApi.delete(id);
-      // ИЛИ — если вы хотите 100% актуальность — перезагружаем:
       await loadData();
-       if (onDataChange) onDataChange();
+      if (onDataChange) onDataChange();
     } catch (err) {
-      // При ошибке — откатываем
-      console.log(`Ошибка удаления ${err}` );
-      await loadData(); // восстанавливаем актуальное состояние
-       if (onDataChange) onDataChange();
+      console.log((err.message || "Ошибка при удалении"));
+      await loadData();
     }
   };
 
@@ -199,7 +200,7 @@ export default function BatchFactManager({ batchId, batchName, onDataChange }) {
         </button>
       </div>
 
-      {/* Итоговая себестоимость */}
+      {/* Итоговая себестоимость — теперь обновляется автоматически! */}
       <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
         <div className="text-gray-700 mb-1">
           Прямые затраты (сырьё): <strong>{totalCost.toFixed(2)} ₽</strong>

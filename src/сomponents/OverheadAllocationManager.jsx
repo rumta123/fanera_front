@@ -133,11 +133,14 @@ export default function OverheadAllocationManager({
 
       // ✅ Полная перезагрузка (НЕ setAllocations(filter(...)))
       await loadData();
-
+      resetForm();
       // ✅ Уведомляем родителя
       if (onDataChange) onDataChange();
     } catch (err) {
-       await loadData();
+      await loadData();
+      resetForm();
+      if (onDataChange) onDataChange();
+
       console.log(err.message || "Ошибка при удалении");
     }
   };
