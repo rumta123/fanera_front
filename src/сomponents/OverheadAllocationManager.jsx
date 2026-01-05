@@ -105,13 +105,10 @@ export default function OverheadAllocationManager({
         await overheadAllocationApi.create(payload);
       }
 
-      // ✅ Полная перезагрузка
       await loadData();
-
+      resetForm();
       // ✅ Уведомляем родителя
       if (onDataChange) onDataChange();
-
-      resetForm();
     } catch (err) {
       alert(err.message || "Ошибка при сохранении распределения");
     }

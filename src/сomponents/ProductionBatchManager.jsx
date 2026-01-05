@@ -108,8 +108,9 @@ export default function ProductionBatchManager() {
   }, [loadData]);
 
   const handleDataChange = useCallback(() => {
-    loadData();
-    setDataVersion((v) => v + 1);
+    loadData().then(() => {
+      setDataVersion((v) => v + 1);
+    });
   }, [loadData]);
 
   const handleChange = (e) => {
@@ -246,7 +247,15 @@ export default function ProductionBatchManager() {
 
     return result;
     // ⬇️ ДОБАВЛЕНО: dataVersion
-  }, [batches, searchTerm, sortConfig, products, workshops, dataVersion]);
+  }, [
+    batches,
+    searchTerm,
+    sortConfig,
+    products,
+    workshops,
+    dataVersion,
+    batchCosts,
+  ]);
 
   const requestSort = (key) => {
     setSortConfig((prev) => ({
@@ -529,7 +538,13 @@ export default function ProductionBatchManager() {
                     <td className="px-4 py-3 text-sm">
                       {(() => {
                         const planned = b.planned_cost;
-                        const actual = b.actual_cost;
+                        // ✅ ИСПОЛЬЗУЕМ fullCost из batchCosts вместо b.actual_cost
+                        const batchInfo = batchCosts[b.id];
+                        const actual =
+                          batchInfo?.fullCost != null
+                            ? batchInfo.fullCost
+                            : b.actual_cost; // fallback на случай, если нет данных
+
                         const plannedQty = Number(b.planned_quantity) || 0;
                         const actualQty =
                           b.actual_quantity != null
@@ -545,6 +560,7 @@ export default function ProductionBatchManager() {
 
                         const lines = [];
 
+                        // План — без изменений
                         if (planned != null) {
                           const plannedTotal = Number(planned).toFixed(2);
                           const plannedPer =
@@ -585,6 +601,7 @@ export default function ProductionBatchManager() {
                           );
                         }
 
+                        // ✅ Факт — теперь с накладными!
                         if (actual != null) {
                           const actualTotal = Number(actual).toFixed(2);
                           const actualPer =
@@ -609,6 +626,7 @@ export default function ProductionBatchManager() {
                           product?.cost_per_unit != null &&
                           actualQty != null
                         ) {
+                          // ⚠️ Этот блок теперь почти не нужен, но оставим как fallback
                           const estActual = (
                             product.cost_per_unit * actualQty
                           ).toFixed(2);
@@ -623,6 +641,7 @@ export default function ProductionBatchManager() {
                           );
                         }
 
+                        // Отклонение — уже правильно использует batchCosts, но упростим
                         if (
                           (planned != null || product?.cost_per_unit != null) &&
                           (actual != null || product?.cost_per_unit != null) &&
@@ -634,15 +653,10 @@ export default function ProductionBatchManager() {
                               : product
                               ? product.cost_per_unit * plannedQty
                               : null;
-                          const batchInfo = batchCosts[b.id];
+
+                          // ✅ totalActual уже берётся из actual (который = fullCost)
                           const totalActual =
-                            actual != null
-                              ? Number(actual)
-                              : batchInfo && batchInfo.fullCost != null
-                              ? Number(batchInfo.fullCost)
-                              : product && actualQty != null
-                              ? product.cost_per_unit * actualQty
-                              : null;
+                            actual != null ? Number(actual) : null;
 
                           if (totalPlanned != null && totalActual != null) {
                             const variance = totalActual - totalPlanned;
