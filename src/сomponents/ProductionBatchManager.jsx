@@ -25,7 +25,6 @@ export default function ProductionBatchManager() {
   const [selectedOverheadBatchId, setSelectedOverheadBatchId] = useState(null);
   const { role } = useAuth();
 
-  // 🔑 Ключевое состояние для синхронизации дочерних компонентов
   const [dataVersion, setDataVersion] = useState(0);
 
   const [form, setForm] = useState({
@@ -50,7 +49,6 @@ export default function ProductionBatchManager() {
     [products]
   );
 
-  // 🔁 Функция загрузки данных — обёрнута в useCallback
   const loadData = useCallback(async () => {
     try {
       setError(null);
@@ -104,16 +102,14 @@ export default function ProductionBatchManager() {
     }
   }, []);
 
-  // Загружаем при монтировании
   useEffect(() => {
     setLoading(true);
     loadData();
   }, [loadData]);
 
-  // ✅ Единая функция для обновления всех данных
   const handleDataChange = useCallback(() => {
-    loadData(); // Обновляем основной список партий
-    setDataVersion((v) => v + 1); // Триггер для пересоздания модальных окон
+    loadData();
+    setDataVersion((v) => v + 1);
   }, [loadData]);
 
   const handleChange = (e) => {
@@ -208,7 +204,7 @@ export default function ProductionBatchManager() {
     setIsFormOpen(false);
   };
 
-  // Поиск и сортировка
+  // 🔥 КЛЮЧЕВОЕ ИЗМЕНЕНИЕ: добавлен dataVersion в зависимости
   const filteredAndSortedBatches = useMemo(() => {
     let result = [...batches];
 
@@ -249,7 +245,8 @@ export default function ProductionBatchManager() {
     }
 
     return result;
-  }, [batches, searchTerm, sortConfig, products, workshops]);
+    // ⬇️ ДОБАВЛЕНО: dataVersion
+  }, [batches, searchTerm, sortConfig, products, workshops, dataVersion]);
 
   const requestSort = (key) => {
     setSortConfig((prev) => ({
@@ -762,7 +759,7 @@ export default function ProductionBatchManager() {
         )}
       </div>
 
-      {/* МОДАЛЬНЫЕ ОКНА — КЛЮЧЕВЫЕ ИЗМЕНЕНИЯ ЗДЕСЬ */}
+      {/* Модальные окна */}
       {selectedBatchId && (
         <BatchFactManager
           key={`batch-fact-${selectedBatchId}-${dataVersion}`}
