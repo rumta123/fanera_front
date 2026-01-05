@@ -155,6 +155,8 @@ export default function BatchFactManager({
     } catch (err) {
       console.log((err.message || "Ошибка при удалении"));
       await loadData();
+         await loadData();
+      if (onDataChange) onDataChange();
     }
   };
 
